@@ -6,7 +6,7 @@
       <DefineConstants>BUILD_DOTNET_TOOL</DefineConstants> 
     -->
     <OutputType>Exe</OutputType>
-    <Version>0.3.2</Version>
+    <Version>0.4.0</Version>
     <AssemblyName>SetResolution</AssemblyName>
     <Namespace>Westwind.SetResolution</Namespace>
     <ProductName>Set Windows Display Resolution</ProductName>
@@ -21,9 +21,11 @@
       * Create and use profiles for quick mode switches
       * Support multiple Monitors
       * Prompts for confirmation to avoid possibly invalid display modes
+      * Saves the mode, so Windows sets it back when a full screen game exits
+      * CURRENT and RESTORE commands for scripts, with exit codes
     </Description>
-    <Authors>Rick Strahl, West Wind Technologies</Authors>
-    <Copyright>West Wind Technologies, 2022-2025</Copyright>
+    <Authors>Rick Strahl, West Wind Technologies; Benjamin Maurin (njz3)</Authors>
+    <Copyright>West Wind Technologies, 2022-2025; Benjamin Maurin (njz3), 2026</Copyright>
 
     
     <PackageIcon>icon.png</PackageIcon>
@@ -50,6 +52,10 @@
 
   <ItemGroup>
     <Folder Include="nupkg\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="SetResolution.Tests" />
   </ItemGroup>
 
 

@@ -6,10 +6,13 @@ namespace HtmlPackager.ConsoleApp
     /// <summary>
     /// Basic Command Line Parser class that can deal with simple
     /// switch based command line arguments
-    /// 
-    /// supports: FirstParm (first commandline argume
-    /// -pString or -p"String"
+    ///
+    /// supports: FirstParm (first commandline argument)
+    /// -p String, -pString or -p"String"
     /// -f     switch/flag parameters
+    ///
+    /// Switches are looked up in the arguments only, never in the path of
+    /// the executable, and a flag must be a whole argument.
     /// </summary>
     public abstract class CommandLineParser
     {
@@ -26,7 +29,7 @@ namespace HtmlPackager.ConsoleApp
         public string CommandLine { get; set; }
 
         /// <summary>
-        /// The first argument (if any). Useful for a 
+        /// The first argument (if any). Useful for a
         /// command/action parameter
         /// </summary>
         public string FirstParameter { get; set; }
@@ -68,48 +71,33 @@ namespace HtmlPackager.ConsoleApp
 
         /// <summary>
         /// Parses a string Parameter switch in the format of:
-        /// 
+        ///
+        /// -p "c:\temp files\somefile.txt"
         /// -p"c:\temp files\somefile.txt"
         /// -pc:\somefile.txt
-        /// 
-        /// Note no spaces are allowed between swich and value.
-        /// </summary>        
+        /// </summary>
         /// <param name="parm">parameter switch key</param>
         /// <param name="nonMatchingValue">Value to return if no match is found</param>
         /// <returns>Match or non-matching value</returns>
         protected string ParseStringParameterSwitch(string parm, string nonMatchingValue = null)
         {
-            int at = CommandLine.IndexOf(parm, 0, StringComparison.OrdinalIgnoreCase);
-
-            if (at > -1)
+            // value in the next argument: -p MyProfile
+            for (int i = 0; i < Arguments.Length; i++)
             {
-                string rest = CommandLine.Substring(at + parm.Length).Trim();
+                if (!Arguments[i].Equals(parm, StringComparison.OrdinalIgnoreCase))
+                    continue;
 
-                if (rest.StartsWith("\""))
-                {
-                    // read to end quote
-                    at = rest.IndexOf('"', 2);
-                    if (at == -1)
-                        return CommandLine;
+                if (i + 1 < Arguments.Length && !IsSwitch(Arguments[i + 1]))
+                    return Arguments[i + 1].Trim('"', '\'');
 
-                    return rest.Substring(1, at - 1);
-                }
-                else if (rest == " ")
-                {
-                    // no spaces after parameters
-                    return CommandLine;
-                }
-                else
-                {
-                    // read to next space
-                    rest = rest.Trim();
-                    at = (rest + " ").IndexOf(' ');
-                    string stringParm = rest.Substring(0, at);
-                    if (!string.IsNullOrEmpty(stringParm))
-                        stringParm = stringParm.Trim('"', '\'');
+                return nonMatchingValue;
+            }
 
-                    return stringParm;
-                }
+            // value attached to the switch: -m2, -p"My Profile"
+            foreach (string arg in Arguments)
+            {
+                if (arg.Length > parm.Length && arg.StartsWith(parm, StringComparison.OrdinalIgnoreCase))
+                    return arg.Substring(parm.Length).Trim('"', '\'');
             }
 
             return nonMatchingValue;
@@ -127,12 +115,18 @@ namespace HtmlPackager.ConsoleApp
 
         protected bool ParseParameterSwitch(string parm)
         {
-            int at = CommandLine.IndexOf(parm, 0, StringComparison.OrdinalIgnoreCase);
-
-            if (at > -1)
-                return true;
+            foreach (string arg in Arguments)
+            {
+                if (arg.Equals(parm, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
 
             return false;
+        }
+
+        private static bool IsSwitch(string arg)
+        {
+            return arg.StartsWith("-") && !int.TryParse(arg, out _);
         }
     }
 }

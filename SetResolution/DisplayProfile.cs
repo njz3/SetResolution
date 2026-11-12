@@ -26,6 +26,7 @@ namespace Westwind.SetResolution
             cmd.Width = Width;
             cmd.Height = Height;
             cmd.Frequency = Frequency;
+            cmd.FrequencyGiven = Frequency > 0;
             cmd.BitCount = BitSize;
             cmd.Orientation = Orientation;
         }

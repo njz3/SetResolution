@@ -35,6 +35,13 @@ namespace Westwind.SetResolution
         );
 
         public const int ENUM_CURRENT_SETTINGS = -1;
+        /// <summary>Mode saved by Windows, the one it restores when a full screen game exits.</summary>
+        public const int ENUM_REGISTRY_SETTINGS = -2;
+        /// <summary>dmDisplayFlags: interlaced mode.</summary>
+        public const uint DM_INTERLACED = 0x2;
+
+        /// <summary>ChangeDisplaySettingsEx: save the mode in the Windows display database.</summary>
+        public const uint CDS_UPDATEREGISTRY = 0x00000001;
         public const int DMDO_DEFAULT = 0;
         public const int DMDO_90 = 1;
         public const int DMDO_180 = 2;
@@ -264,6 +271,37 @@ namespace Westwind.SetResolution
             uint dwflags, 
             IntPtr lParam);
 
+
+
+        #region Display configuration (CCD)
+
+        // The path and mode arrays are only handed back to SetDisplayConfig,
+        // so they are kept as raw blocks of DISPLAYCONFIG_PATH_INFO (72 bytes)
+        // and DISPLAYCONFIG_MODE_INFO (64 bytes).
+        public const int DISPLAYCONFIG_PATH_INFO_SIZE = 72;
+        public const int DISPLAYCONFIG_MODE_INFO_SIZE = 64;
+
+        public const uint QDC_ONLY_ACTIVE_PATHS = 0x00000002;
+        public const uint SDC_USE_SUPPLIED_DISPLAY_CONFIG = 0x00000020;
+        public const uint SDC_APPLY = 0x00000080;
+        public const uint SDC_SAVE_TO_DATABASE = 0x00000200;
+        public const uint SDC_ALLOW_CHANGES = 0x00000400;
+        public const int ERROR_INSUFFICIENT_BUFFER = 122;
+
+        [DllImport("user32.dll")]
+        public static extern int GetDisplayConfigBufferSizes(uint flags, out uint numPathArrayElements, out uint numModeInfoArrayElements);
+
+        [DllImport("user32.dll")]
+        public static extern int QueryDisplayConfig(uint flags,
+            ref uint numPathArrayElements, [Out] byte[] pathArray,
+            ref uint numModeInfoArrayElements, [Out] byte[] modeInfoArray,
+            IntPtr currentTopologyId);
+
+        [DllImport("user32.dll")]
+        public static extern int SetDisplayConfig(uint numPathArrayElements, byte[] pathArray,
+            uint numModeInfoArrayElements, byte[] modeInfoArray, uint flags);
+
+        #endregion
 
 
         [DllImport("kernel32.dll", SetLastError = true, BestFitMapping = false, ThrowOnUnmappableChar = true)]

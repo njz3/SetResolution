@@ -42,6 +42,21 @@ namespace Westwind.SetResolution
         /// </remarks>
         public static void SetDisplaySettings(DisplaySettings set, string deviceName = null)
         {
+            // force to persist settings in registry
+            DisplayChangeResult result = ChangeMode(set, deviceName, set.NoPersist ? 0u : CDS_UPDATEREGISTRY);
+
+            string msg = Describe(result);
+            if (msg != null)
+                throw new InvalidOperationException(msg);
+        }
+
+        /// <summary>
+        /// Applies a mode and returns the answer of Windows.
+        /// </summary>
+        /// <param name="flags">0: dynamic change only; CDS_UPDATEREGISTRY: also saved.</param>
+        /// <remarks>The interlaced flag is not passed: the driver chooses, as before.</remarks>
+        internal static DisplayChangeResult ChangeMode(DisplaySettings set, string deviceName, uint flags)
+        {
             DisplayManagerNative.DEVMODE mode = GetDeviceMode(deviceName);
 
             mode.dmPelsWidth = (uint)set.Width;
@@ -51,10 +66,57 @@ namespace Westwind.SetResolution
             mode.dmDisplayFrequency = (uint)set.Frequency;
             mode.dmFields = DmFlags.DM_PELSWIDTH | DmFlags.DM_PELSHEIGHT | DmFlags.DM_DISPLAYFREQUENCY | DmFlags.DM_BITSPERPEL | DmFlags.DM_DISPLAYORIENTATION;
 
+            return (DisplayChangeResult)DisplayManagerNative.ChangeDisplaySettingsEx(deviceName, ref mode, IntPtr.Zero, flags, IntPtr.Zero);
+        }
 
-            uint CDS_UPDATEREGISTRY = set.NoPersist ? 0u : 1;   // force to persist settings in registry
-            DisplayChangeResult result = (DisplayChangeResult)DisplayManagerNative.ChangeDisplaySettingsEx(deviceName, ref mode, IntPtr.Zero,  CDS_UPDATEREGISTRY, IntPtr.Zero);
-            
+        /// <summary>
+        /// Returns the mode saved by Windows for the display, the one it restores
+        /// when a full screen game exits, or null when there is none.
+        /// </summary>
+        public static DisplaySettings GetRegistryDisplaySetting(string deviceName = null)
+        {
+            var mode = new DisplayManagerNative.DEVMODE();
+            mode.Initialize();
+
+            if (!DisplayManagerNative.EnumDisplaySettings(DisplayManagerNative.ToLPTStr(deviceName), ENUM_REGISTRY_SETTINGS, ref mode))
+                return null;
+
+            return CreateDisplaySettingsObject(-2, mode);
+        }
+
+        /// <summary>
+        /// Saves the active display configuration (topology and modes of all
+        /// displays, as they are on screen) in the Windows display database
+        /// with SetDisplayConfig. Returns 0 or a Win32 error code.
+        /// </summary>
+        public static int SaveActiveConfigToDatabase()
+        {
+            for (int attempt = 0; attempt < 3; attempt++)
+            {
+                int error = GetDisplayConfigBufferSizes(QDC_ONLY_ACTIVE_PATHS, out uint pathCount, out uint modeCount);
+                if (error != 0)
+                    return error;
+
+                var paths = new byte[pathCount * DISPLAYCONFIG_PATH_INFO_SIZE];
+                var modes = new byte[modeCount * DISPLAYCONFIG_MODE_INFO_SIZE];
+                error = QueryDisplayConfig(QDC_ONLY_ACTIVE_PATHS, ref pathCount, paths, ref modeCount, modes, IntPtr.Zero);
+                if (error == ERROR_INSUFFICIENT_BUFFER)
+                    continue; // a display changed in between
+                if (error != 0)
+                    return error;
+
+                return SetDisplayConfig(pathCount, paths, modeCount, modes,
+                    SDC_APPLY | SDC_USE_SUPPLIED_DISPLAY_CONFIG | SDC_SAVE_TO_DATABASE | SDC_ALLOW_CHANGES);
+            }
+
+            return ERROR_INSUFFICIENT_BUFFER;
+        }
+
+        /// <summary>
+        /// Message for a failed ChangeDisplaySettingsEx, null on success.
+        /// </summary>
+        internal static string Describe(DisplayChangeResult result)
+        {
             string msg = null;
             switch (result)
             {
@@ -81,8 +143,7 @@ namespace Westwind.SetResolution
                     break;
             }
 
-            if (msg != null)
-                throw new InvalidOperationException(msg);
+            return msg;
         }
 
 
@@ -215,7 +276,8 @@ namespace Westwind.SetResolution
                 Height = (int)mode.dmPelsHeight,
                 Orientation = (Orientation)mode.dmDisplayOrientation,
                 BitCount = (int)mode.dmBitsPerPel,
-                Frequency = (int)mode.dmDisplayFrequency
+                Frequency = (int)mode.dmDisplayFrequency,
+                Interlaced = (mode.dmDisplayFlags & DM_INTERLACED) != 0
             };
         }
 
@@ -268,10 +330,25 @@ namespace Westwind.SetResolution
         public int Frequency { get; set; }
 
         /// <summary>
+        /// Interlaced mode (DM_INTERLACED). Only shown: not part of Equals.
+        /// </summary>
+        public bool Interlaced { get; set; }
+
+        /// <summary>
         /// Determines whether the settings are stored in the registry for
         /// persistence for a reboot.
         /// </summary>
         public bool NoPersist { get; set; }
+
+        /// <summary>
+        /// Short form for scripts: 640x480@60, 1280x480@60i, 1920x1080@60,Rotate90
+        /// </summary>
+        public string Describe()
+        {
+            return string.Format(System.Globalization.CultureInfo.InvariantCulture, "{0}x{1}@{2}{3}{4}",
+                Width, Height, Frequency, Interlaced ? "i" : "",
+                Orientation != Orientation.Default ? "," + Orientation : "");
+        }
 
         /// <summary>
         /// Display Mode string display with full detail
@@ -294,7 +371,7 @@ namespace Westwind.SetResolution
             }
 
             return string.Format(System.Globalization.CultureInfo.CurrentCulture,
-                $"{Width} x {Height}, {Frequency}hz, {BitCount}bit{(Orientation != Orientation.Default ? ", " + Orientation.ToString() : "")}");
+                $"{Width} x {Height}, {Frequency}hz{(Interlaced ? " interlaced" : "")}, {BitCount}bit{(Orientation != Orientation.Default ? ", " + Orientation.ToString() : "")}");
         }
 
 

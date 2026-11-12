@@ -17,6 +17,42 @@ This small command line utility allows you to quickly set Windows Display Resolu
 
 ![](https://raw.githubusercontent.com/RickStrahl/SetResolution/master/Assets/SetResolutionMain.png)
 
+## Scripts: saved modes, CURRENT, RESTORE and SAVE (njz3 fork)
+This fork (0.4.0) is used on arcade cabinets whose CRT modes (640x480, 1280x240, 1920x240, 1024x384, 1280x480...) are set by scripts. Windows keeps a **saved mode** per monitor and sets it back when a full screen game exits: a mode that was only changed dynamically (as `-nopersist`, or SetResolution 0.1.x, does) is lost at that moment and the display comes back in, say, 1920x1080.
+
+* `SET`, `-w/-h` and profiles **save** the mode, and check that Windows really saved it. If not, the active display configuration is saved with `SetDisplayConfig`. `-temp` (or `-nopersist`) keeps the old dynamic change.
+* `CURRENT` prints one line, for scripts and logs, and exits with 0 when both modes are the same, 1 when they differ:
+  ```
+  current=640x480@60 registry=1920x1080@60 different monitor=1
+  ```
+  `i` follows the frequency of an interlaced mode (`1280x480@60i`).
+* `RESTORE -w 640 -h 480 -noprompt` is meant for game launchers, after the game. It changes nothing when the display and the saved mode are already right, so the display doesn't flicker; it saves the mode on screen without switching when only the saved mode is wrong; otherwise it sets and saves the mode. Without `-w/-h/-p` it reads the resolution from the name of the witness file `C:\Racecab\Configured_for_<W>x<H>.txt` (folder changed with `-dir`), and refuses to guess when several of them disagree.
+* `SAVE` saves the modes on screen (all monitors) as the Windows modes, without switching.
+* Without `-f`, 60 Hz is preferred; when the mode has no 60 Hz, the current frequency or the one nearest to 60 Hz is used (previously: an error). `RESTORE` without `-f` only compares the size.
+* `-noprompt` never waits and prints no banner. Without it, a script with no console sets the previous mode back (exit code 6) instead of waiting.
+* Exit codes: 0 to 2 are successes, 3 and above failures.
+
+| Code | Meaning |
+|--:|:--|
+| 0 | Done. `RESTORE`: nothing to change. `CURRENT`: current and saved modes are the same |
+| 1 | `CURRENT`: the modes differ. `RESTORE`: the mode was set again, and saved |
+| 2 | `RESTORE`: display already right, only the saved mode was corrected |
+| 3 | Wrong command line, unknown profile or command, no usable witness file |
+| 4 | No active display (service, remote shell...) or unknown `-m` monitor |
+| 5 | The driver has no matching display mode |
+| 6 | Not confirmed at the prompt: the previous mode was set back |
+| 7 | The mode is on the display but Windows did not save it |
+| 9 | Unexpected error |
+| 10 | `DISP_CHANGE_RESTART`: Windows must restart for the mode |
+| 11 to 16 | Windows refused the mode: `DISP_CHANGE_FAILED`, `BADMODE`, `NOTUPDATED`, `BADFLAGS`, `BADPARAM`, `BADDUALVIEW` |
+
+For instance, at the end of a launcher:
+
+```bat
+"C:\Racecab\Utils\SetResolution.exe" RESTORE -noprompt
+EXIT
+```
+
 ## Basic Usage
 Most common usage is via a **pre-defined profile name**:
 
@@ -259,6 +295,15 @@ You can't set a resolution that is not supported by the driver/monitor combo at 
 We prompt for confirmation after the resolution change and if you don't confirm in 5 seconds the display reverts to the previous mode. This ensures if your screen for some reason goes blank, you will revert back to your last working configuration. While I'm not a fan of confirmation prompts, in this case it's both prudent, and only slightly intrusive as you can simply press a key after submitting the shell command. If it really bugs you you can also run with `-noprompt` which skips the prompt (*not recommended though*).
 
 ## Changelog
+
+### 0.4.0 (njz3 fork)
+
+* **Saved mode checked**: after `SET`, the mode saved by Windows is read back (`ENUM_REGISTRY_SETTINGS`); if it differs, the active configuration is saved with `SetDisplayConfig` (`SDC_SAVE_TO_DATABASE`), otherwise exit code 7.
+* **`CURRENT`, `RESTORE` and `SAVE` commands**, `-temp` alias of `-nopersist`, `-dir` for the Racecab witness file.
+* **Exit codes** for every command (the exe returned 0 even on failure).
+* **No 60 Hz mode**: another frequency of the mode is used when `-f` is not given.
+* **Command line**: switches are read in the arguments only, no longer in the whole command line, where `-w` or `-m` in the path of the exe were taken for switches.
+* **No display** (service, remote shell) or **unknown `-m` monitor**: a message and exit code 4 instead of a NullReferenceException; `-m` now also applies to the mode that is set back when not confirmed.
 
 ### 0.3.2
 
